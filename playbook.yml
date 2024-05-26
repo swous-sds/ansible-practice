@@ -1,0 +1,70 @@
+---
+- name: Configure web server
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Create ansible-worker user
+      ansible.builtin.user:
+        name: ansible-worker
+
+    - name: Install Git
+      ansible.builtin.apt:
+        name: git
+        state: present
+
+    - name: Copy SSH keys
+      ansible.builtin.copy:
+        src: ssh_keys/
+        dest: /home/ansible-worker/.ssh/
+        owner: ansible-worker
+        group: ansible-worker
+        mode: 0600
+
+    - name: Clone repository
+      ansible.builtin.git:
+        repo: "https://github.com/iphilka/stud-template.git"
+        dest: "/home/ansible-worker/www/stud-template"
+        update: no
+        clone: yes
+
+    - name: Replace index.html
+      ansible.builtin.copy:
+        src: index.html
+        dest: /home/ansible-worker/www/stud-template/index.html
+        owner: ansible-worker
+        group: ansible-worker
+        mode: 0644
+
+    - name: Set read permissions for ansible-worker directory
+      ansible.builtin.file:
+        path: /home/ansible-worker
+        owner: ansible-worker
+        group: ansible-worker
+        mode: "0755"
+        recurse: yes
+
+
+    - name: Install Nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Copy Nginx configuration
+      ansible.builtin.template:
+        src: templates/ansible.iphilka.ru.conf.j2
+        dest: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+      notify: Restart Nginx
+
+    - name: Create symbolic link for Nginx config
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+        dest: /etc/nginx/sites-enabled/ansible.iphilka.ru.conf
+        state: link
+      notify: Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
